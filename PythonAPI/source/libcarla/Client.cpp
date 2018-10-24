@@ -9,8 +9,7 @@
 #include <carla/client/World.h>
 
 static void SetTimeout(carla::client::Client &client, double seconds) {
-  size_t ms = static_cast<size_t>(1e3 * seconds);
-  client.SetTimeout(carla::time_duration::milliseconds(ms));
+  client.SetTimeout(TimeDurationFromSeconds(seconds));
 }
 
 void export_client() {
@@ -22,7 +21,6 @@ void export_client() {
     .def("set_timeout", &::SetTimeout, (arg("seconds")))
     .def("get_client_version", &cc::Client::GetClientVersion)
     .def("get_server_version", CONST_CALL_WITHOUT_GIL(cc::Client, GetServerVersion))
-    .def("ping", CONST_CALL_WITHOUT_GIL(cc::Client, Ping))
     .def("get_world", &cc::Client::GetWorld)
   ;
 }

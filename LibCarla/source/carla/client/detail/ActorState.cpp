@@ -12,7 +12,7 @@ namespace carla {
 namespace client {
 namespace detail {
 
-  ActorState::ActorState(rpc::Actor description, Episode episode)
+  ActorState::ActorState(rpc::Actor description, EpisodeProxy episode)
     : _description(std::move(description)),
       _episode(std::move(episode)),
       _display_id([](const auto &desc) {

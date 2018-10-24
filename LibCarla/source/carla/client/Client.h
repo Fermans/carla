@@ -7,7 +7,8 @@
 #pragma once
 
 #include "carla/PythonUtil.h"
-#include "carla/client/detail/Client.h"
+#include "carla/client/World.h"
+#include "carla/client/detail/Simulator.h"
 
 namespace carla {
 namespace client {
@@ -26,37 +27,38 @@ namespace client {
         uint16_t port,
         size_t worker_threads = 0u);
 
+    /// Set a timeout for networking operations. If set, any networking
+    /// operation taking longer than @a timeout throws rpc::timeout.
     void SetTimeout(time_duration timeout) {
-      _client_state->SetTimeout(timeout);
+      _simulator->SetNetworkingTimeout(timeout);
     }
 
+    /// Return the version string of this client API.
     std::string GetClientVersion() const {
-      return _client_state->GetClientVersion();
+      return _simulator->GetClientVersion();
     }
 
+    /// Return the version string of the simulator we are connected to.
     std::string GetServerVersion() const {
-      return _client_state->GetServerVersion();
+      return _simulator->GetServerVersion();
     }
 
-    bool Ping() const {
-      return _client_state->Ping();
-    }
-
+    /// Return an instance of the world currently active in the simulator.
     World GetWorld() const {
-      return _client_state->GetCurrentEpisode();
+      return World{_simulator->GetCurrentEpisode()};
     }
 
   private:
 
-    SharedPtr<detail::Client> _client_state;
+    std::shared_ptr<detail::Simulator> _simulator;
   };
 
   inline Client::Client(
       const std::string &host,
       uint16_t port,
       size_t worker_threads)
-    : _client_state(
-        new detail::Client(host, port, worker_threads),
+    : _simulator(
+        new detail::Simulator(host, port, worker_threads),
         PythonUtil::ReleaseGILDeleter()) {}
 
 } // namespace client

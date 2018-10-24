@@ -51,6 +51,37 @@ file(GLOB libcarla_carla_opendrive_sources
 set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_sources}")
 install(FILES ${libcarla_carla_opendrive_sources} DESTINATION include/carla/opendrive)
 
+file(GLOB libcarla_carla_opendrive_parser_pugixml_sources
+    "${libcarla_source_path}/carla/opendrive/parser/pugixml/*.cpp"
+    "${libcarla_source_path}/carla/opendrive/parser/pugixml/*.hpp"
+    "${libcarla_source_path}/carla/opendrive/parser/pugixml/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_parser_pugixml_sources}")
+install(FILES ${libcarla_carla_opendrive_parser_pugixml_sources} DESTINATION include/carla/opendrive/parser/pugixml)
+
+file(GLOB libcarla_carla_opendrive_parser_sources
+    "${libcarla_source_path}/carla/opendrive/parser/*.cpp"
+    "${libcarla_source_path}/carla/opendrive/parser/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_parser_sources}")
+install(FILES ${libcarla_carla_opendrive_parser_sources} DESTINATION include/carla/opendrive/parser)
+
+file(GLOB libcarla_carla_opendrive_math_sources
+    "${libcarla_source_path}/carla/opendrive/math/*.cpp"
+    "${libcarla_source_path}/carla/opendrive/math/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_math_sources}")
+install(FILES ${libcarla_carla_opendrive_math_sources} DESTINATION include/carla/opendrive/math)
+
+file(GLOB libcarla_carla_opendrive_logic_cephes_sources
+    "${libcarla_source_path}/carla/opendrive/logic/cephes/*.cpp"
+    "${libcarla_source_path}/carla/opendrive/logic/cephes/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_logic_cephes_sources}")
+install(FILES ${libcarla_carla_opendrive_logic_cephes_sources} DESTINATION include/carla/opendrive/logic/cephes)
+
+file(GLOB libcarla_carla_opendrive_logic_sources
+    "${libcarla_source_path}/carla/opendrive/logic/*.cpp"
+    "${libcarla_source_path}/carla/opendrive/logic/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_opendrive_logic_sources}")
+install(FILES ${libcarla_carla_opendrive_logic_sources} DESTINATION include/carla/opendrive/logic)
+
 file(GLOB libcarla_carla_pointcloud_sources
     "${libcarla_source_path}/carla/pointcloud/*.cpp"
     "${libcarla_source_path}/carla/pointcloud/*.h")
@@ -68,6 +99,12 @@ file(GLOB libcarla_carla_road_sources
     "${libcarla_source_path}/carla/road/*.h")
 set(libcarla_sources "${libcarla_sources};${libcarla_carla_road_sources}")
 install(FILES ${libcarla_carla_road_sources} DESTINATION include/carla/road)
+
+file(GLOB libcarla_carla_road_element_sources
+    "${libcarla_source_path}/carla/road/element/*.cpp"
+    "${libcarla_source_path}/carla/road/element/*.h")
+set(libcarla_sources "${libcarla_sources};${libcarla_carla_road_element_sources}")
+install(FILES ${libcarla_carla_road_element_sources} DESTINATION include/carla/road/element)
 
 file(GLOB libcarla_carla_rpc_sources
     "${libcarla_source_path}/carla/rpc/*.cpp"
@@ -133,8 +170,7 @@ foreach(target carla_client_debug carla_client)
       "${BOOST_INCLUDE_PATH}"
       "${RPCLIB_INCLUDE_PATH}")
 
-  # @todo This was disabled because now everything is built in the setup.py.
-  # install(TARGETS ${target} DESTINATION lib)
+  install(TARGETS ${target} DESTINATION lib)
 endforeach(target)
 
 # Specific options for debug.
@@ -142,4 +178,4 @@ set_target_properties(carla_client_debug PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FL
 target_compile_definitions(carla_client_debug PUBLIC -DBOOST_ASIO_ENABLE_BUFFER_DEBUGGING)
 
 # Specific options for release.
-set_target_properties(carla_client PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS_RELEASE})
+set_target_properties(carla_client PROPERTIES COMPILE_FLAGS ${CMAKE_CXX_FLAGS_RELEASE_CLIENT})

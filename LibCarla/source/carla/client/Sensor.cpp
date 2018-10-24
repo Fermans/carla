@@ -7,7 +7,9 @@
 #include "carla/client/Sensor.h"
 
 #include "carla/Logging.h"
-#include "carla/client/detail/Client.h"
+#include "carla/client/detail/Simulator.h"
+
+#include <exception>
 
 #include <exception>
 
@@ -15,7 +17,7 @@ namespace carla {
 namespace client {
 
   Sensor::~Sensor() {
-    if (IsAlive()) {
+    if (IsAlive() && _is_listening) {
       log_warning(
           "sensor object went out of the scope but the sensor is still alive",
           "in the simulation:",
@@ -32,15 +34,7 @@ namespace client {
 
   void Sensor::Listen(CallbackFunctionType callback) {
     log_debug(GetDisplayId(), ": subscribing to stream");
-    if (_is_listening) {
-      log_warning(
-          "attempting to listen to stream but sensor is already listening:",
-          GetDisplayId());
-      return;
-    }
-    GetEpisode()->SubscribeToStream(
-        GetActorDescription().GetStreamToken(),
-        std::move(callback));
+    GetEpisode().Lock()->SubscribeToSensor(*this, std::move(callback));
     _is_listening = true;
   }
 
@@ -51,16 +45,15 @@ namespace client {
           GetDisplayId());
       return;
     }
-    GetEpisode()->UnSubscribeFromStream(
-        GetActorDescription().GetStreamToken());
+    GetEpisode().Lock()->UnSubscribeFromSensor(*this);
     _is_listening = false;
   }
 
-  void Sensor::Destroy() {
+  bool Sensor::Destroy() {
     if (_is_listening) {
       Stop();
     }
-    Actor::Destroy();
+    return Actor::Destroy();
   }
 
 } // namespace client

@@ -72,7 +72,7 @@ TEST(streaming, low_level_sending_strings) {
   }
 
   std::this_thread::sleep_for(2ms);
-  ASSERT_EQ(message_count, number_of_messages);
+  ASSERT_GE(message_count, number_of_messages - 3u);
 }
 
 TEST(streaming, low_level_unsubscribing) {
@@ -114,7 +114,7 @@ TEST(streaming, low_level_unsubscribing) {
       stream << message_text;
     }
 
-    ASSERT_EQ(message_count, number_of_messages);
+    ASSERT_GE(message_count, number_of_messages - 3u);
   }
 }
 
@@ -139,7 +139,7 @@ TEST(streaming, low_level_tcp_small_message) {
       std::this_thread::sleep_for(1ns);
     }
     std::cout << "done!\n";
-  });
+  }, [](std::shared_ptr<tcp::ServerSession>) { std::cout << "session closed!\n"; });
 
   Dispatcher dispatcher{make_endpoint<tcp::Client::protocol_type>(ep)};
   auto stream = dispatcher.MakeStream();
@@ -214,3 +214,42 @@ TEST(streaming, stream_outlives_server) {
   std::this_thread::sleep_for(20ms);
   done = true;
 } // stream dies here.
+
+TEST(streaming, multi_stream) {
+  using namespace carla::streaming;
+  using namespace util::buffer;
+  constexpr size_t number_of_messages = 100u;
+  constexpr size_t number_of_clients = 6u;
+  constexpr size_t iterations = 10u;
+  const std::string message = "Hi y'all!";
+
+  Server srv(TESTING_PORT);
+  srv.AsyncRun(number_of_clients);
+  auto stream = srv.MakeMultiStream();
+
+  for (auto i = 0u; i < iterations; ++i) {
+    std::vector<std::pair<std::atomic_size_t, std::unique_ptr<Client>>> v(number_of_clients);
+
+    for (auto &pair : v) {
+      pair.first = 0u;
+      pair.second = std::make_unique<Client>();
+      pair.second->AsyncRun(1u);
+      pair.second->Subscribe(stream.token(), [&](auto buffer) {
+        const std::string result = as_string(buffer);
+        ASSERT_EQ(result, message);
+        ++pair.first;
+      });
+    }
+
+    std::this_thread::sleep_for(6ms);
+    for (auto i = 0u; i < number_of_messages; ++i) {
+      std::this_thread::sleep_for(6ms);
+      stream << message;
+    }
+    std::this_thread::sleep_for(6ms);
+
+    for (auto &pair : v) {
+      ASSERT_GE(pair.first, number_of_messages - 3u);
+    }
+  }
+}

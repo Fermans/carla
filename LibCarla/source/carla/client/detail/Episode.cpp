@@ -6,9 +6,9 @@
 
 #include "carla/client/detail/Episode.h"
 
+#include "carla/Logging.h"
 #include "carla/client/detail/Client.h"
-
-#include <boost/atomic.hpp>
+#include "carla/sensor/Deserializer.h"
 
 #include <exception>
 
@@ -16,27 +16,49 @@ namespace carla {
 namespace client {
 namespace detail {
 
-  EpisodeImpl::EpisodeImpl(SharedPtr<PersistentState> state)
-    : _state(std::move(state)),
-      _episode_id(_state->GetCurrentEpisodeId()) {}
-
-  void EpisodeImpl::ClearState() {
-    boost::atomic_store_explicit(&_state, {nullptr}, boost::memory_order_relaxed);
+  static auto &CastData(const sensor::SensorData &data) {
+    using target_t = const sensor::data::RawEpisodeState;
+    DEBUG_ASSERT(dynamic_cast<target_t *>(&data) != nullptr);
+    return static_cast<target_t &>(data);
   }
 
-  PersistentState &EpisodeImpl::GetPersistentStateWithChecks() const {
-    auto state = boost::atomic_load_explicit(&_state, boost::memory_order_relaxed);
-    if (state == nullptr) {
-      throw std::runtime_error(
-          "trying to operate on a destroyed actor; an actor's function "
-          "was called, but the actor is already destroyed.");
+  Episode::Episode(Client &client)
+    : _client(client),
+      _description(client.GetEpisodeInfo()),
+      _state(std::make_shared<EpisodeState>()) {}
+
+  Episode::~Episode() {
+    try {
+      _client.UnSubscribeFromStream(_description.token);
+    } catch (const std::exception &e) {
+      log_error("exception trying to disconnect from episode:", e.what());
     }
-    if (_episode_id != _state->GetCurrentEpisodeId()) {
-      throw std::runtime_error(
-          "trying to access an expired episode; a new episode was started "
-          "in the simulation but an object tried accessing the old one.");
+  }
+
+  void Episode::Listen() {
+    std::weak_ptr<Episode> weak = shared_from_this();
+    _client.SubscribeToStream(_description.token, [weak](auto buffer) {
+      auto self = weak.lock();
+      if (self != nullptr) {
+        auto data = sensor::Deserializer::Deserialize(std::move(buffer));
+        auto prev = self->_state.load();
+        auto next = prev->DeriveNextStep(CastData(*data));
+        /// @todo Check that this state occurred after.
+        self->_state = next;
+        self->_timestamp.SetValue(next->GetTimestamp());
+        self->_on_tick_callbacks.Call(next->GetTimestamp());
+      }
+    });
+  }
+
+  std::vector<rpc::Actor> Episode::GetActors() {
+    auto state = GetState();
+    auto actor_ids = state->GetActorIds();
+    auto missing_ids = _actors.GetMissingIds(actor_ids);
+    if (!missing_ids.empty()) {
+      _actors.InsertRange(_client.GetActorsById(missing_ids));
     }
-    return *_state;
+    return _actors.GetActorsById(actor_ids);
   }
 
 } // namespace detail

@@ -12,6 +12,7 @@
 #include "Vehicle/WheeledVehicleAIController.h"
 
 #include "Engine/CollisionProfile.h"
+#include "DrawDebugHelpers.h"
 
 static bool IsSplineValid(const USplineComponent *SplineComponent)
 {
@@ -79,27 +80,54 @@ void ARoutePlanner::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 }
 #endif // WITH_EDITOR
 
+void ARoutePlanner::AddRoute(float probability, const TArray<FVector> &routePoints)
+{
+    USplineComponent *NewSpline = NewObject<USplineComponent>(this);
+
+    for (int i = 0; i < routePoints.Num(); ++i)
+    {
+        NewSpline->AddSplinePoint(routePoints[i], ESplineCoordinateSpace::World, true);
+        DrawDebugPoint(GetWorld(), routePoints[i], 3, FColor::Red, true, 999999999999);
+    }
+
+    Routes.Add(NewSpline);
+    Probabilities.Add(probability);
+}
+
+void ARoutePlanner::CleanRoute()
+{
+    Routes.Empty();
+    Probabilities.Empty();
+}
+
+void ARoutePlanner::Init()
+{
+    if (Routes.Num() < 1)
+    {
+        UE_LOG(LogCarla, Warning, TEXT("ARoutePlanner has no route assigned."));
+        return;
+    }
+
+    for (auto &&Route : Routes)
+    {
+        if (!IsSplineValid(Route))
+        {
+            UE_LOG(LogCarla, Error, TEXT("ARoutePlanner has a route with zero way-points."));
+            return;
+        }
+    }
+
+    // Register delegate on begin overlap.
+    if (!TriggerVolume->OnComponentBeginOverlap.IsAlreadyBound(this, &ARoutePlanner::OnTriggerBeginOverlap))
+    {
+        TriggerVolume->OnComponentBeginOverlap.AddDynamic(this, &ARoutePlanner::OnTriggerBeginOverlap);
+    }
+}
+
 void ARoutePlanner::BeginPlay()
 {
   Super::BeginPlay();
-
-  if (Routes.Num() < 1) {
-    UE_LOG(LogCarla, Warning, TEXT("ARoutePlanner has no route assigned."));
-    return;
-  }
-
-  for (auto &&Route : Routes) {
-    if (!IsSplineValid(Route)) {
-      UE_LOG(LogCarla, Error, TEXT("ARoutePlanner has a route with zero way-points."));
-      return;
-    }
-  }
-
-  // Register delegate on begin overlap.
-  if (!TriggerVolume->OnComponentBeginOverlap.IsAlreadyBound(this, &ARoutePlanner::OnTriggerBeginOverlap))
-  {
-    TriggerVolume->OnComponentBeginOverlap.AddDynamic(this, &ARoutePlanner::OnTriggerBeginOverlap);
-  }
+  Init();
 }
 
 void ARoutePlanner::EndPlay(const EEndPlayReason::Type EndPlayReason)

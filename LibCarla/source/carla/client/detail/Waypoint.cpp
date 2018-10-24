@@ -4,19 +4,20 @@
 // This work is licensed under the terms of the MIT license.
 // For a copy, see <https://opensource.org/licenses/MIT>.
 
-#pragma once
-
-// #include "carla/client/detail/Client.h"
+#include "carla/client/detail/Waypoint.h"
 
 namespace carla {
 namespace client {
 namespace detail {
 
-  class Client;
+  Waypoint::~Waypoint() = default; // to ensure we delete _map
 
-  /// At this point the client is the only persistent state we have, but
-  /// conceptually is nice to make the distinction.
-  using PersistentState = Client;
+  // @todo
+  /*std::vector<Waypoint> Waypoint::NextWaypoints(double dist) {
+    std::vector<Waypoint> v;
+
+    return v;
+  }*/
 
 } // namespace detail
 } // namespace client

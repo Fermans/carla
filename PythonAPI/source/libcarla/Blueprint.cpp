@@ -11,28 +11,6 @@
 
 #include <ostream>
 
-template <typename Iterable>
-static std::ostream &PrintList(std::ostream &out, const Iterable &list) {
-  out << '[';
-  if (!list.empty()) {
-    auto it = list.begin();
-    out << *it;
-    for (++it; it != list.end(); ++it) {
-      out << ", " << *it;
-    }
-  }
-  out << ']';
-  return out;
-}
-
-namespace std {
-
-  std::ostream &operator<<(std::ostream &out, const std::vector<std::string> &vector_of_strings) {
-    return PrintList(out, vector_of_strings);
-  }
-
-} // namespace std
-
 namespace carla {
 
 namespace sensor {
@@ -114,6 +92,8 @@ void export_blueprint() {
     .def_readwrite("g", &csd::Color::g)
     .def_readwrite("b", &csd::Color::b)
     .def_readwrite("a", &csd::Color::a)
+    .def("__eq__", &csd::Color::operator==)
+    .def("__ne__", &csd::Color::operator!=)
     .def(self_ns::str(self_ns::self))
   ;
 
@@ -155,9 +135,9 @@ void export_blueprint() {
   class_<cc::ActorBlueprint>("ActorBlueprint", no_init)
     .add_property("id", CALL_RETURNING_COPY(cc::ActorBlueprint, GetId))
     .add_property("tags", &cc::ActorBlueprint::GetTags)
-    .def("contains_tag", &cc::ActorBlueprint::ContainsTag)
+    .def("has_tag", &cc::ActorBlueprint::ContainsTag)
     .def("match_tags", &cc::ActorBlueprint::MatchTags)
-    .def("contains_attribute", &cc::ActorBlueprint::ContainsAttribute)
+    .def("has_attribute", &cc::ActorBlueprint::ContainsAttribute)
     .def("get_attribute", CALL_RETURNING_COPY_1(cc::ActorBlueprint, GetAttribute, const std::string &))
     .def("set_attribute", &cc::ActorBlueprint::SetAttribute)
     .def("__len__", &cc::ActorBlueprint::size)

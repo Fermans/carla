@@ -6,51 +6,74 @@
 
 #pragma once
 
-#include "carla/Debug.h"
-#include "carla/Memory.h"
-#include "carla/client/detail/PersistentState.h"
+#include "carla/AtomicSharedPtr.h"
+#include "carla/NonCopyable.h"
+#include "carla/RecurrentSharedFuture.h"
+#include "carla/client/Timestamp.h"
+#include "carla/client/detail/CachedActorList.h"
+#include "carla/client/detail/CallbackList.h"
+#include "carla/client/detail/EpisodeState.h"
+#include "carla/rpc/EpisodeInfo.h"
 
 namespace carla {
 namespace client {
 namespace detail {
 
-  class EpisodeImpl {
+  class Client;
+
+  /// Represents the episode running on the Simulator.
+  class Episode
+    : public std::enable_shared_from_this<Episode>,
+      private NonCopyable {
   public:
 
-    PersistentState &operator*() const {
-      return GetPersistentStateWithChecks();
+    explicit Episode(Client &client);
+
+    ~Episode();
+
+    void Listen();
+
+    auto GetId() const {
+      return _description.id;
     }
 
-    PersistentState *operator->() const {
-      return &GetPersistentStateWithChecks();
+    const std::string &GetMapName() const {
+      return _description.map_name;
     }
 
-  protected:
+    std::shared_ptr<const EpisodeState> GetState() const {
+      auto state = _state.load();
+      DEBUG_ASSERT(state != nullptr);
+      return state;
+    }
 
-    EpisodeImpl(SharedPtr<PersistentState> state);
+    void RegisterActor(rpc::Actor actor) {
+      _actors.Insert(std::move(actor));
+    }
 
-    void ClearState();
+    std::vector<rpc::Actor> GetActors();
+
+    Timestamp WaitForState(time_duration timeout) {
+      return _timestamp.WaitFor(timeout);
+    }
+
+    void RegisterOnTickEvent(std::function<void(Timestamp)> callback) {
+      _on_tick_callbacks.RegisterCallback(std::move(callback));
+    }
 
   private:
 
-    PersistentState &GetPersistentStateWithChecks() const;
+    Client &_client;
 
-    SharedPtr<PersistentState> _state;
+    const rpc::EpisodeInfo _description;
 
-    size_t _episode_id;
-  };
+    RecurrentSharedFuture<Timestamp> _timestamp;
 
-  class Episode : private EpisodeImpl {
-  public:
+    AtomicSharedPtr<const EpisodeState> _state;
 
-    using EpisodeImpl::operator*;
-    using EpisodeImpl::operator->;
+    CachedActorList _actors;
 
-  private:
-
-    friend PersistentState;
-
-    using EpisodeImpl::EpisodeImpl;
+    CallbackList<Timestamp> _on_tick_callbacks;
   };
 
 } // namespace detail

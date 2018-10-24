@@ -10,6 +10,7 @@
 #include <carla/image/ImageView.h>
 #include <carla/pointcloud/PointCloudIO.h>
 #include <carla/sensor/SensorData.h>
+#include <carla/sensor/data/CollisionEvent.h>
 #include <carla/sensor/data/Image.h>
 #include <carla/sensor/data/LidarMeasurement.h>
 
@@ -36,12 +37,19 @@ namespace data {
     return out;
   }
 
+  std::ostream &operator<<(std::ostream &out, const CollisionEvent &meas) {
+    out << "CollisionEvent(frame=" << meas.GetFrameNumber()
+        << ", other_actor=" << meas.GetOtherActor()
+        << ')';
+    return out;
+  }
+
 } // namespace data
 } // namespace sensor
 } // namespace carla
 
 enum class EColorConverter {
-  None,
+  Raw,
   Depth,
   LogarithmicDepth,
   CityScapesPalette
@@ -51,7 +59,7 @@ template <typename T>
 static auto GetRawDataAsBuffer(T &self) {
   auto *data = reinterpret_cast<unsigned char *>(self.data());
   auto size = sizeof(typename T::value_type) * self.size();
-#if PYTHON3X // NOTE(Andrei): python 3
+#if PY_MAJOR_VERSION >= 3 // NOTE(Andrei): python 3
   auto *ptr = PyMemoryView_FromMemory(reinterpret_cast<char *>(data), size, PyBUF_READ);
 #else        // NOTE(Andrei): python 2
   auto *ptr = PyBuffer_FromMemory(data, size);
@@ -74,7 +82,7 @@ static void ConvertImage(T &self, EColorConverter cc) {
     case EColorConverter::CityScapesPalette:
       ImageConverter::ConvertInPlace(view, ColorConverter::CityScapesPalette());
       break;
-    case EColorConverter::None:
+    case EColorConverter::Raw:
       break; // ignore.
     default:
       throw std::invalid_argument("invalid color converter!");
@@ -87,7 +95,7 @@ static std::string SaveImageToDisk(T &self, std::string path, EColorConverter cc
   using namespace carla::image;
   auto view = ImageView::MakeView(self);
   switch (cc) {
-    case EColorConverter::None:
+    case EColorConverter::Raw:
       return ImageIO::WriteView(
           std::move(path),
           view);
@@ -117,6 +125,7 @@ static std::string SavePointCloudToDisk(T &self, std::string path) {
 void export_sensor_data() {
   using namespace boost::python;
   namespace cc = carla::client;
+  namespace cr = carla::rpc;
   namespace cs = carla::sensor;
   namespace csd = carla::sensor::data;
 
@@ -126,7 +135,7 @@ void export_sensor_data() {
   ;
 
   enum_<EColorConverter>("ColorConverter")
-    .value("None", EColorConverter::None)
+    .value("Raw", EColorConverter::Raw)
     .value("Depth", EColorConverter::Depth)
     .value("LogarithmicDepth", EColorConverter::LogarithmicDepth)
     .value("CityScapesPalette", EColorConverter::CityScapesPalette)
@@ -138,9 +147,15 @@ void export_sensor_data() {
     .add_property("fov", &csd::Image::GetFOVAngle)
     .add_property("raw_data", &GetRawDataAsBuffer<csd::Image>)
     .def("convert", &ConvertImage<csd::Image>, (arg("color_converter")))
-    .def("save_to_disk", &SaveImageToDisk<csd::Image>, (arg("path"), arg("color_converter")=EColorConverter::None))
+    .def("save_to_disk", &SaveImageToDisk<csd::Image>, (arg("path"), arg("color_converter")=EColorConverter::Raw))
     .def("__len__", &csd::Image::size)
     .def("__iter__", iterator<csd::Image>())
+    .def("__getitem__", +[](const csd::Image &self, size_t pos) -> csd::Color {
+      return self.at(pos);
+    })
+    .def("__setitem__", +[](csd::Image &self, size_t pos, csd::Color color) {
+      self.at(pos) = color;
+    })
     .def(self_ns::str(self_ns::self))
   ;
 
@@ -152,6 +167,19 @@ void export_sensor_data() {
     .def("save_to_disk", &SavePointCloudToDisk<csd::LidarMeasurement>, (arg("path")))
     .def("__len__", &csd::LidarMeasurement::size)
     .def("__iter__", iterator<csd::LidarMeasurement>())
+    .def("__getitem__", +[](const csd::LidarMeasurement &self, size_t pos) -> cr::Location {
+      return self.at(pos);
+    })
+    .def("__setitem__", +[](csd::LidarMeasurement &self, size_t pos, const cr::Location &point) {
+      self.at(pos) = point;
+    })
+    .def(self_ns::str(self_ns::self))
+  ;
+
+  class_<csd::CollisionEvent, bases<cs::SensorData>, boost::noncopyable, boost::shared_ptr<csd::CollisionEvent>>("CollisionEvent", no_init)
+    .add_property("actor", &csd::CollisionEvent::GetActor)
+    .add_property("other_actor", &csd::CollisionEvent::GetOtherActor)
+    .add_property("normal_impulse", CALL_RETURNING_COPY(csd::CollisionEvent, GetNormalImpulse))
     .def(self_ns::str(self_ns::self))
   ;
 }

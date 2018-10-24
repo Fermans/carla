@@ -9,25 +9,24 @@
 #include "carla/Memory.h"
 #include "carla/NonCopyable.h"
 #include "carla/Time.h"
-#include "carla/client/GarbageCollectionPolicy.h"
-#include "carla/client/detail/Episode.h"
 #include "carla/geom/Transform.h"
-#include "carla/profiler/LifetimeProfiled.h"
+#include "carla/rpc/Actor.h"
+#include "carla/rpc/ActorDefinition.h"
+#include "carla/rpc/EpisodeInfo.h"
+#include "carla/rpc/WeatherParameters.h"
 
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 // Forward declarations.
 namespace carla {
-namespace client {
-  class Actor;
-  class ActorBlueprint;
-  class BlueprintLibrary;
-  class Vehicle;
-  class Episode;
+  class Buffer;
+namespace rpc {
+  class ActorDescription;
+  class VehicleControl;
 }
-namespace rpc { class VehicleControl; }
 namespace sensor { class SensorData; }
 namespace streaming { class Token; }
 }
@@ -36,18 +35,17 @@ namespace carla {
 namespace client {
 namespace detail {
 
+  /// Provides communication with the rpc and streaming servers of a CARLA
+  /// simulator.
+  ///
   /// @todo Make sure this class is really thread-safe.
-  class Client
-    : public EnableSharedFromThis<Client>,
-      private profiler::LifetimeProfiled,
-      private NonCopyable {
+  class Client : private NonCopyable {
   public:
 
     explicit Client(
         const std::string &host,
         uint16_t port,
-        size_t worker_threads = 0u,
-        bool enable_garbage_collection = false);
+        size_t worker_threads = 0u);
 
     ~Client();
 
@@ -57,60 +55,59 @@ namespace detail {
 
     std::string GetServerVersion();
 
-    bool Ping();
+    rpc::EpisodeInfo GetEpisodeInfo();
 
-    SharedPtr<BlueprintLibrary> GetBlueprintLibrary();
+    std::vector<rpc::ActorDefinition> GetActorDefinitions();
 
-    SharedPtr<Actor> GetSpectator();
+    rpc::Actor GetSpectator();
 
-    SharedPtr<Actor> SpawnActor(
-        const ActorBlueprint &blueprint,
+    rpc::WeatherParameters GetWeatherParameters();
+
+    void SetWeatherParameters(const rpc::WeatherParameters &weather);
+
+    std::vector<rpc::Actor> GetActorsById(const std::vector<actor_id_type> &ids);
+
+    rpc::Actor SpawnActor(
+        const rpc::ActorDescription &description,
+        const geom::Transform &transform);
+
+    rpc::Actor SpawnActorWithParent(
+        const rpc::ActorDescription &description,
         const geom::Transform &transform,
-        Actor *parent,
-        GarbageCollectionPolicy gc = GarbageCollectionPolicy::Inherit);
+        const rpc::Actor &parent);
 
-    bool DestroyActor(Actor &actor);
+    bool DestroyActor(const rpc::Actor &actor);
+
+    void SetActorLocation(
+        const rpc::Actor &actor,
+        const geom::Location &location);
+
+    void SetActorTransform(
+        const rpc::Actor &actor,
+        const geom::Transform &transform);
+
+    void SetActorSimulatePhysics(
+        const rpc::Actor &actor,
+        bool enabled);
+
+    void SetActorAutopilot(
+        const rpc::Actor &vehicle,
+        bool enabled);
+
+    void ApplyControlToActor(
+        const rpc::Actor &vehicle,
+        const rpc::VehicleControl &control);
 
     void SubscribeToStream(
         const streaming::Token &token,
-        std::function<void(SharedPtr<sensor::SensorData>)> callback);
+        std::function<void(Buffer)> callback);
 
     void UnSubscribeFromStream(const streaming::Token &token);
-
-    geom::Location GetActorLocation(const Actor &actor);
-
-    geom::Transform GetActorTransform(const Actor &actor);
-
-    void SetActorLocation(Actor &actor, const geom::Location &location);
-
-    void SetActorTransform(Actor &actor, const geom::Transform &transform);
-
-    void SetVehicleAutopilot(Vehicle &vehicle, bool enabled = true);
-
-    void ApplyControlToVehicle(Vehicle &vehicle, const rpc::VehicleControl &control);
-
-    GarbageCollectionPolicy GetGarbageCollectionPolicy() const {
-      return _gc_policy;
-    }
-
-    size_t GetCurrentEpisodeId() const {
-      return _episode_id;
-    }
-
-    Episode GetCurrentEpisode() {
-      return shared_from_this();
-    }
 
   private:
 
     class Pimpl;
     const std::unique_ptr<Pimpl> _pimpl;
-
-    const GarbageCollectionPolicy _gc_policy;
-
-    // At this point the id won't change because we cannot yet restart the
-    // episode from the client.
-    const size_t _episode_id = 0u;
   };
 
 } // namespace detail
